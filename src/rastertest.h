@@ -92,40 +92,24 @@ typedef struct
 } model_t;
 void vadd( vect_t *o, vect_t a, vect_t b )
 {
-#ifdef __SSE__
-	__asm("movups %1,%%xmm0\naddps %2,%%xmm0\nmovups %%xmm0,%0\n"
-		:"=m"(o):"m"(a),"m"(b));
-#else
 	o->x = a.x+b.x;
 	o->y = a.y+b.y;
 	o->z = a.z+b.z;
 	o->w = a.w+b.w;
-#endif
 }
 void vmul( vect_t *o, vect_t a, vect_t b )
 {
-#ifdef __SSE__
-	__asm("movups %1,%%xmm0\nmulps %2,%%xmm0\nmovups %%xmm0,%0\n"
-		:"=m"(o):"m"(a),"m"(b));
-#else
 	o->x = a.x*b.x;
 	o->y = a.y*b.y;
 	o->z = a.z*b.z;
 	o->w = a.w*b.w;
-#endif
 }
 void vscale( vect_t *o, vect_t a, float b )
 {
-#ifdef __SSE__
-	vect_t bv = {b,b,b,b};
-	__asm("movups %1,%%xmm0\nmulps %2,%%xmm0\nmovups %%xmm0,%0\n"
-		:"=m"(o):"m"(a),"m"(bv));
-#else
 	o->x = a.x*b;
 	o->y = a.y*b;
 	o->z = a.z*b;
 	o->w = a.w*b;
-#endif
 }
 void vmat( vect_t *o, mat_t a, vect_t b )
 {
@@ -155,40 +139,24 @@ void mscale( mat_t *o, mat_t a, float b )
 }
 void cadd( color_t *o, color_t a, color_t b )
 {
-#ifdef __SSE__
-	__asm("movups %1,%%xmm0\naddps %2,%%xmm0\nmovups %%xmm0,%0\n"
-		:"=m"(o):"m"(a),"m"(b));
-#else
 	o->r = a.r+b.r;
 	o->g = a.g+b.g;
 	o->b = a.b+b.b;
 	o->a = a.a+b.a;
-#endif
 }
 void cmul( color_t *o, color_t a, color_t b )
 {
-#ifdef __SSE__
-	__asm("movups %1,%%xmm0\nmulps %2,%%xmm0\nmovups %%xmm0,%0\n"
-		:"=m"(o):"m"(a),"m"(b));
-#else
 	o->r = a.r*b.r;
 	o->g = a.g*b.g;
 	o->b = a.b*b.b;
 	o->a = a.a*b.a;
-#endif
 }
 void cscale( color_t *o, color_t a, float b )
 {
-#ifdef __SSE__
-	color_t bv = {b,b,b,b};
-	__asm("movups %1,%%xmm0\nmulps %2,%%xmm0\nmovups %%xmm0,%0\n"
-		:"=m"(o):"m"(a),"m"(bv));
-#else
 	o->r = a.r*b;
 	o->g = a.g*b;
 	o->b = a.b*b;
 	o->a = a.a*b;
-#endif
 }
 #define PI 3.14159265359f
 void frustum( mat_t *o, float left, float right, float bottom, float top,
