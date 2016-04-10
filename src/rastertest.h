@@ -40,6 +40,7 @@ typedef struct
 	float *depth;
 	int *stencil;
 	int width, height;
+	float znear, zfar;
 } buffer_t;
 #define TXCLAMP  0
 #define TXWRAP   1

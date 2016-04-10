@@ -15,10 +15,10 @@
 
 vect_t cubevect[8] =
 {
-	{-0.5f,-0.5f, 0.5f,1.f},{ 0.5f,-0.5f, 0.5f,1.f},
-	{-0.5f, 0.5f, 0.5f,1.f},{ 0.5f, 0.5f, 0.5f,1.f},
-	{-0.5f,-0.5f,-0.5f,1.f},{ 0.5f,-0.5f,-0.5f,1.f},
-	{-0.5f, 0.5f,-0.5f,1.f},{ 0.5f, 0.5f,-0.5f,1.f}
+	{-1.f,-1.f, 1.f,1.f},{ 1.f,-1.f, 1.f,1.f},
+	{-1.f, 1.f, 1.f,1.f},{ 1.f, 1.f, 1.f,1.f},
+	{-1.f,-1.f,-1.f,1.f},{ 1.f,-1.f,-1.f,1.f},
+	{-1.f, 1.f,-1.f,1.f},{ 1.f, 1.f,-1.f,1.f}
 };
 vect_t cubenorm[6] =
 {
@@ -61,10 +61,10 @@ model_t cube =
 {
 	cubevect,cubenorm,cubecoord,cubecolor,0,cubefaces,8,6,4,8,0,12
 };
-vect_t cubepos = {0.f,0.f,-5.f,1.f};
+vect_t cubepos = {0.f,0.f,-10.f,1.f};
 vect_t cuberot = {0.f,0.f,0.f,0.f};
 mat_t projection, translation, rotation;
-buffer_t screen = {0,0,0,640,480};
+buffer_t screen = {0,0,0,640,480,0.1f,100.0f};
 
 pixel_t cubepixels[256] =
 {
@@ -165,8 +165,6 @@ void putpixel( px_t p, color_t c )
 		|| (p.y >= screen.height) )
 		return;
 	int coord = p.x+p.y*screen.width;
-	float dep = screen.depth[coord];
-	if ( (p.d < 0.f) || (p.d > dep) ) return;
 	screen.depth[coord] = p.d;
 	screen.color[coord].r = c.r*255.f;
 	screen.color[coord].g = c.g*255.f;
@@ -225,6 +223,7 @@ void filltriangle( px_t p[3], coord_t tc[3], color_t c[3] )
 	maxb.y = clamp(max(p[0].y,max(p[1].y,p[2].y)),0,screen.height);
 	minb.x = clamp(min(p[0].x,min(p[1].x,p[2].x)),0,screen.width);
 	minb.y = clamp(min(p[0].y,min(p[1].y,p[2].y)),0,screen.height);
+	if ( (maxb.x == minb.x) || (maxb.y == minb.y) ) return;
 	vect_t d1 = {p[1].x-p[0].x,p[1].y-p[0].y,0.f,0.f},
 		d2 = {p[2].x-p[0].x,p[2].y-p[0].y,0.f,0.f};
 	color_t c1 = {c[1].r-c[0].r,c[1].g-c[0].g,c[1].b-c[0].b,c[1].a-c[0].a},
@@ -243,6 +242,11 @@ void filltriangle( px_t p[3], coord_t tc[3], color_t c[3] )
 				t = (d1.x*q.y-d1.y*q.x)/u;
 			if ( (s>=0.f) && (t>=0.f) && (s+t<=1.f) )
 			{
+				int coord = x+y*screen.width;
+				float dep = screen.depth[coord];
+				float pd = p[0].d+s*dp1+t*dp2;
+				if ( (pd < screen.znear) || (pd > screen.zfar)
+					|| (pd > dep) ) continue;
 				color_t pc =
 				{
 					c[0].r+s*c1.r+t*c2.r,
@@ -256,7 +260,7 @@ void filltriangle( px_t p[3], coord_t tc[3], color_t c[3] )
 					tc[0].t+s*t1.t+t*t2.t
 				};
 				sampletexture(&pc,tx,cubetex);
-				px_t px = {x,y,p[0].d+s*dp1+t*dp2,0};
+				px_t px = {x,y,pd,0};
 				putpixel(px,pc);
 			}
 		}
@@ -342,6 +346,7 @@ void rendermodel( void )
 			0
 		};
 		drawtriangle(face,0);
+		drawtriangle(face,1);
 	}
 }
 
@@ -366,10 +371,9 @@ int main( void )
 	float frame = 0.f, fps = NAN, fpsmin = INFINITY, fpsmax = -INFINITY,
 		fpsavg = 0.f;
 	long tick, tock;
-	float znear = 0.1f, zfar = 100.f;
-	float fh = tanf(90.f/360.f*PI)*znear,
+	float fh = tanf(90.f/360.f*PI)*screen.znear,
 		fw = fh*(screen.width/(float)screen.height);
-	frustum(&projection,-fw,fw,-fh,fh,znear,zfar);
+	frustum(&projection,-fw,fw,-fh,fh,screen.znear,screen.zfar);
 	char fpst[16];
 	while ( active )
 	{
