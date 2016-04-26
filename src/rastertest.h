@@ -22,8 +22,7 @@ typedef struct
 } mat_t;
 typedef struct
 {
-	int x,y;
-	float d;
+	float x,y,d;
 	int s;
 } px_t;
 typedef struct
