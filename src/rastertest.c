@@ -13,6 +13,18 @@
 #include <time.h>
 #include "rastertest.h"
 
+const char helptext[8][32] =
+{
+	"WASD : move horizontally",
+	"QE   : move vertically",
+	"↑←↓→ : rotate",
+	"F    : toggle fps display",
+	"X    : toggle fill/wireframe",
+	"Z    : toggle auto-rotate",
+	"F1   : toggle this text",
+	"ESC  : quit"
+};
+
 vect_t cubevect[8] =
 {
 	{ 1.f,-1.f,-1.f,1.f},{ 1.f,-1.f, 1.f,1.f},
@@ -249,7 +261,7 @@ void filltriangle( px_t p[3], coord_t tc[3], color_t c[3] )
 	}
 }
 
-void drawtriangle( tri_t t, unsigned char wireframe )
+void drawclippedtriangle( tri_t t )
 {
 	px_t pts[3] =
 	{
@@ -261,16 +273,8 @@ void drawtriangle( tri_t t, unsigned char wireframe )
 			-t.v[1].z,0.f},
 		{(1.f+t.v[2].x/-t.v[2].z)*0.5f*screen.width,
 			(1.f+t.v[2].y/-t.v[2].z)*0.5f*screen.height,
-			-t.v[2].z,0.f},
+			-t.v[2].z,0.f}
 	};
-	if ( wireframe )
-	{
-		color_t wire = {0.f,0.6f,0.f,1.f};
-		drawline(pts[0].x,pts[1].x,pts[0].y,pts[1].y,wire);
-		drawline(pts[0].x,pts[2].x,pts[0].y,pts[2].y,wire);
-		drawline(pts[1].x,pts[2].x,pts[1].y,pts[2].y,wire);
-		return;
-	}
 	vect_t facet, ab, ac;
 	ab.x = pts[1].x-pts[0].x;
 	ab.y = pts[1].y-pts[0].y;
@@ -285,9 +289,74 @@ void drawtriangle( tri_t t, unsigned char wireframe )
 	filltriangle(pts,coords,cols);
 }
 
+void clipanddrawwire( vect_t a, vect_t b )
+{
+	vect_t p;
+	float t;
+	a.z *= -1;
+	b.z *= -1;
+	/* NEAR clipping */
+	if ( (a.z < screen.znear) && (b.z < screen.znear) ) return;
+	else if ( a.z < screen.znear )
+	{
+		vsub(&p,a,b);
+		t = (screen.znear-b.z)/p.z;
+		a.x = b.x+p.x*t;
+		a.y = b.y+p.y*t;
+		a.z = screen.znear;
+	}
+	else if ( b.z < screen.znear )
+	{
+		vsub(&p,b,a);
+		t = (screen.znear-a.z)/p.z;
+		b.x = a.x+p.x*t;
+		b.y = a.y+p.y*t;
+		b.z = screen.znear;
+	}
+	/* FAR clipping */
+	if ( (a.z > screen.zfar) && (b.z > screen.zfar) ) return;
+	else if ( a.z > screen.zfar )
+	{
+		vsub(&p,a,b);
+		t = (screen.zfar-b.z)/p.z;
+		a.x = b.x+p.x*t;
+		a.y = b.y+p.y*t;
+		a.z = screen.zfar;
+	}
+	else if ( b.z > screen.zfar )
+	{
+		vsub(&p,b,a);
+		t = (screen.zfar-a.z)/p.z;
+		b.x = a.x+p.x*t;
+		b.y = a.y+p.y*t;
+		b.z = screen.zfar;
+	}
+	a.x = (1.f+a.x/a.z)*0.5f*screen.width;
+	a.y = (1.f+a.y/a.z)*0.5f*screen.height;
+	b.x = (1.f+b.x/b.z)*0.5f*screen.width;
+	b.y = (1.f+b.y/b.z)*0.5f*screen.height;
+	color_t wire = {0.f,0.6f,0.f,1.f};
+	drawline(a.x,b.x,a.y,b.y,wire);
+}
+
+void drawtriangle( tri_t t, unsigned char wireframe )
+{
+	if ( wireframe )
+	{
+		clipanddrawwire(t.v[0],t.v[1]);
+		clipanddrawwire(t.v[1],t.v[2]);
+		clipanddrawwire(t.v[2],t.v[0]);
+		return;
+	}
+	/* TODO clipping for triangle fill */
+	drawclippedtriangle(t);
+}
+
 pixel_t clearcolor = {16,16,16,255};
 float cleardepth = INFINITY;
 
+int showfps = 1;
+int showhelp = 1;
 int drawwire = 0;
 int autorot = 0;
 
@@ -374,29 +443,33 @@ int main( void )
 				if ( e.key.keysym.sym == SDLK_ESCAPE )
 					active = 0;
 				else if ( e.key.keysym.sym == SDLK_a )
-					cubepos.x -= 0.01f;
+					cubepos.x -= 0.1f;
 				else if ( e.key.keysym.sym == SDLK_d )
-					cubepos.x += 0.01f;
+					cubepos.x += 0.1f;
 				else if ( e.key.keysym.sym == SDLK_q )
-					cubepos.y -= 0.01f;
+					cubepos.y -= 0.1f;
 				else if ( e.key.keysym.sym == SDLK_e )
-					cubepos.y += 0.01f;
+					cubepos.y += 0.1f;
 				else if ( e.key.keysym.sym == SDLK_w )
-					cubepos.z += 0.01f;
+					cubepos.z += 0.1f;
 				else if ( e.key.keysym.sym == SDLK_s )
-					cubepos.z -= 0.01f;
+					cubepos.z -= 0.1f;
 				else if ( e.key.keysym.sym == SDLK_LEFT )
-					ry += 0.01f;
+					ry += 0.025f;
 				else if ( e.key.keysym.sym == SDLK_RIGHT )
-					ry -= 0.01f;
+					ry -= 0.025f;
 				else if ( e.key.keysym.sym == SDLK_UP )
-					rx -= 0.01f;
+					rx -= 0.025f;
 				else if ( e.key.keysym.sym == SDLK_DOWN )
-					rx += 0.01f;
+					rx += 0.025f;
 				else if ( e.key.keysym.sym == SDLK_z )
 					autorot = !autorot;
 				else if ( e.key.keysym.sym == SDLK_x )
 					drawwire = (drawwire<2)?(drawwire+1):0;
+				else if ( e.key.keysym.sym == SDLK_f )
+					showfps = !showfps;
+				else if ( e.key.keysym.sym == SDLK_F1 )
+					showhelp = !showhelp;
 			}
 		}
 		mat_t rotx, roty;
@@ -411,10 +484,27 @@ int main( void )
 		translate(&translation,cubepos);
 		rendermodel();
 		SDL_BlitSurface(fb,0,scr,0);
-		snprintf(fpst,15,"%.2f FPS",fps);
-		SDL_Surface *txt = TTF_RenderText_Blended(fon,fpst,fpscol);
-		SDL_BlitSurface(txt,0,scr,0);
-		SDL_FreeSurface(txt);
+		SDL_Surface *txt;
+		if ( showfps )
+		{
+			snprintf(fpst,15,"%.2f FPS",fps);
+			txt = TTF_RenderText_Blended(fon,fpst,fpscol);
+			SDL_BlitSurface(txt,0,scr,0);
+			SDL_FreeSurface(txt);
+		}
+		if ( showhelp )
+		{
+			SDL_Rect dr =
+				{0,screen.height-TTF_FontHeight(fon)*8,-1,-1};
+			for ( int i=0; i<8; i++ )
+			{
+				txt = TTF_RenderUTF8_Blended(fon,helptext[i],
+					fpscol);
+				SDL_BlitSurface(txt,0,scr,&dr);
+				SDL_FreeSurface(txt);
+				dr.y += TTF_FontHeight(fon);
+			}
+		}
 		SDL_UpdateWindowSurface(win);
 		tock = ticker();
 		frame = (float)(tock-tick)/NANOS_SEC;

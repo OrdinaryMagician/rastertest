@@ -97,12 +97,26 @@ void vadd( vect_t *o, vect_t a, vect_t b )
 	o->z = a.z+b.z;
 	o->w = a.w+b.w;
 }
+void vsub( vect_t *o, vect_t a, vect_t b )
+{
+	o->x = a.x-b.x;
+	o->y = a.y-b.y;
+	o->z = a.z-b.z;
+	o->w = a.w-b.w;
+}
 void vmul( vect_t *o, vect_t a, vect_t b )
 {
 	o->x = a.x*b.x;
 	o->y = a.y*b.y;
 	o->z = a.z*b.z;
 	o->w = a.w*b.w;
+}
+void vdiv( vect_t *o, vect_t a, vect_t b )
+{
+	o->x = a.x/b.x;
+	o->y = a.y/b.y;
+	o->z = a.z/b.z;
+	o->w = a.w/b.w;
 }
 void vscale( vect_t *o, vect_t a, float b )
 {
@@ -144,12 +158,26 @@ void cadd( color_t *o, color_t a, color_t b )
 	o->b = a.b+b.b;
 	o->a = a.a+b.a;
 }
+void csub( color_t *o, color_t a, color_t b )
+{
+	o->r = a.r-b.r;
+	o->g = a.g-b.g;
+	o->b = a.b-b.b;
+	o->a = a.a-b.a;
+}
 void cmul( color_t *o, color_t a, color_t b )
 {
 	o->r = a.r*b.r;
 	o->g = a.g*b.g;
 	o->b = a.b*b.b;
 	o->a = a.a*b.a;
+}
+void cdiv( color_t *o, color_t a, color_t b )
+{
+	o->r = a.r/b.r;
+	o->g = a.g/b.g;
+	o->b = a.b/b.b;
+	o->a = a.a/b.a;
 }
 void cscale( color_t *o, color_t a, float b )
 {
