@@ -76,7 +76,7 @@ model_t cube =
 vect_t cubepos = {0.f,0.f,-4.f,1.f};
 vect_t cuberot = {0.f,0.f,0.f,0.f};
 mat_t projection, translation, rotation;
-buffer_t screen = {0,0,0,640,480,0.1f,100.0f};
+buffer_t screen = {0,0,0,640,480,0.01f,10.0f};
 
 pixel_t cubepixels[64] =
 {
@@ -231,8 +231,7 @@ void filltriangle( px_t p[3], coord_t tc[3], color_t c[3] )
 				float dep = screen.depth[coord];
 				float pd = 1.f/(q.x*p[0].d+q.y*p[1].d
 					+q.z*p[2].d);
-				if ( (pd < screen.znear) || (pd > screen.zfar)
-					|| (pd > dep) ) continue;
+				if ( (pd > dep) ) continue;
 				color_t pc =
 				{
 					q.x*c[0].r+q.y*c[1].r+q.z*c[2].r,
@@ -265,15 +264,15 @@ void drawclippedtriangle( tri_t t )
 {
 	px_t pts[3] =
 	{
-		{(1.f+t.v[0].x/-t.v[0].z)*0.5f*screen.width,
-			(1.f+t.v[0].y/-t.v[0].z)*0.5f*screen.height,
-			-t.v[0].z,0.f},
-		{(1.f+t.v[1].x/-t.v[1].z)*0.5f*screen.width,
-			(1.f+t.v[1].y/-t.v[1].z)*0.5f*screen.height,
-			-t.v[1].z,0.f},
-		{(1.f+t.v[2].x/-t.v[2].z)*0.5f*screen.width,
-			(1.f+t.v[2].y/-t.v[2].z)*0.5f*screen.height,
-			-t.v[2].z,0.f}
+		{(1.f+t.v[0].x/t.v[0].z)*0.5f*screen.width,
+			(1.f+t.v[0].y/t.v[0].z)*0.5f*screen.height,
+			t.v[0].z,0.f},
+		{(1.f+t.v[1].x/t.v[1].z)*0.5f*screen.width,
+			(1.f+t.v[1].y/t.v[1].z)*0.5f*screen.height,
+			t.v[1].z,0.f},
+		{(1.f+t.v[2].x/t.v[2].z)*0.5f*screen.width,
+			(1.f+t.v[2].y/t.v[2].z)*0.5f*screen.height,
+			t.v[2].z,0.f}
 	};
 	vect_t facet, ab, ac;
 	ab.x = pts[1].x-pts[0].x;
@@ -295,9 +294,9 @@ void clipanddrawwire( vect_t a, vect_t b )
 	float t;
 	a.z *= -1;
 	b.z *= -1;
-	/* NEAR clipping */
 	if ( (a.z < screen.znear) && (b.z < screen.znear) ) return;
-	else if ( a.z < screen.znear )
+	if ( (a.z > screen.zfar) && (b.z > screen.zfar) ) return;
+	if ( a.z < screen.znear )
 	{
 		vsub(&p,a,b);
 		t = (screen.znear-b.z)/p.z;
@@ -313,9 +312,7 @@ void clipanddrawwire( vect_t a, vect_t b )
 		b.y = a.y+p.y*t;
 		b.z = screen.znear;
 	}
-	/* FAR clipping */
-	if ( (a.z > screen.zfar) && (b.z > screen.zfar) ) return;
-	else if ( a.z > screen.zfar )
+	if ( a.z > screen.zfar )
 	{
 		vsub(&p,a,b);
 		t = (screen.zfar-b.z)/p.z;
@@ -348,12 +345,111 @@ void drawtriangle( tri_t t, unsigned char wireframe )
 		clipanddrawwire(t.v[2],t.v[0]);
 		return;
 	}
-	/* TODO clipping for triangle fill */
-	drawclippedtriangle(t);
+	t.v[0].z *= -1;
+	t.v[1].z *= -1;
+	t.v[2].z *= -1;
+	if ( (t.v[0].z < screen.znear) && (t.v[1].z < screen.znear)
+		&& (t.v[2].z < screen.znear) ) return;
+	if ( (t.v[0].z > screen.zfar) && (t.v[1].z > screen.zfar)
+		&& (t.v[2].z > screen.zfar) ) return;
+	int ff = 0, fb = 0, fc = 0;
+	for ( int i=0; i<3; i++ )
+	{
+		if ( t.v[i].z < screen.znear )
+		{
+			fb = i;
+			fc++;
+		}
+		else ff = i;
+	}
+	if ( fc == 2 )
+	{
+		tri_t newt;
+		vect_t p1, p2;
+		float t1, t2;
+		int a = (ff+1)%3, b = (ff+2)%3, c = ff;
+		vsub(&p1,t.v[a],t.v[c]);
+		vsub(&p2,t.v[b],t.v[c]);
+		t1 = (screen.znear-t.v[c].z)/p1.z;
+		t2 = (screen.znear-t.v[c].z)/p2.z;
+		newt.m = t.m;
+		newt.v[0].x = t.v[c].x+p1.x*t1;
+		newt.v[0].y = t.v[c].y+p1.y*t1;
+		newt.v[0].z = screen.znear;
+		newt.v[0].w = 1.f;
+		vlerp(&newt.n[0],t.n[c],t.n[a],t1);
+		clerp(&newt.c[0],t.c[c],t.c[a],t1);
+		newt.t[0].s = lerp(t.t[c].s,t.t[a].s,t1);
+		newt.t[0].t = lerp(t.t[c].t,t.t[a].t,t1);
+		newt.v[1].x = t.v[c].x+p2.x*t2;
+		newt.v[1].y = t.v[c].y+p2.y*t2;
+		newt.v[1].z = screen.znear;
+		newt.v[1].w = 1.f;
+		vlerp(&newt.n[1],t.n[c],t.n[b],t2);
+		clerp(&newt.c[1],t.c[c],t.c[b],t2);
+		newt.t[1].s = lerp(t.t[c].s,t.t[b].s,t2);
+		newt.t[1].t = lerp(t.t[c].t,t.t[b].t,t2);
+		newt.v[2] = t.v[c];
+		newt.n[2] = t.n[c];
+		newt.c[2] = t.c[c];
+		newt.t[2] = t.t[c];
+		drawclippedtriangle(newt);
+	}
+	else if ( fc == 1 )
+	{
+		tri_t newt1, newt2;
+		vect_t p1, p2;
+		float t1, t2;
+		int a = (fb+1)%3, b = (fb+2)%3, c = fb;
+		vsub(&p1,t.v[c],t.v[a]);
+		vsub(&p2,t.v[c],t.v[b]);
+		t1 = (screen.znear-t.v[a].z)/p1.z;
+		t2 = (screen.znear-t.v[b].z)/p2.z;
+		newt1.m = t.m;
+		newt1.v[0] = t.v[a];
+		newt1.n[0] = t.n[a];
+		newt1.c[0] = t.c[a];
+		newt1.t[0] = t.t[a];
+		newt1.v[1] = t.v[b];
+		newt1.n[1] = t.n[b];
+		newt1.c[1] = t.c[b];
+		newt1.t[1] = t.t[b];
+		newt1.v[2].x = t.v[a].x+p1.x*t1;
+		newt1.v[2].y = t.v[a].y+p1.y*t1;
+		newt1.v[2].z = screen.znear;
+		newt1.v[2].w = 1.f;
+		vlerp(&newt1.n[2],t.n[a],t.n[c],t1);
+		clerp(&newt1.c[2],t.c[a],t.c[c],t1);
+		newt1.t[2].s = lerp(t.t[a].s,t.t[c].s,t1);
+		newt1.t[2].t = lerp(t.t[a].t,t.t[c].t,t1);
+		drawclippedtriangle(newt1);
+		newt2.m = t.m;
+		newt2.v[0].x = t.v[a].x+p1.x*t1;
+		newt2.v[0].y = t.v[a].y+p1.y*t1;
+		newt2.v[0].z = screen.znear;
+		newt2.v[0].w = 1.f;
+		vlerp(&newt2.n[0],t.n[a],t.n[c],t1);
+		clerp(&newt2.c[0],t.c[a],t.c[c],t1);
+		newt2.t[0].s = lerp(t.t[a].s,t.t[c].s,t1);
+		newt2.t[0].t = lerp(t.t[a].t,t.t[c].t,t1);
+		newt2.v[1] = t.v[b];
+		newt2.n[1] = t.n[b];
+		newt2.c[1] = t.c[b];
+		newt2.t[1] = t.t[b];
+		newt2.v[2].x = t.v[b].x+p2.x*t2;
+		newt2.v[2].y = t.v[b].y+p2.y*t2;
+		newt2.v[2].z = screen.znear;
+		newt2.v[2].w = 1.f;
+		vlerp(&newt2.n[2],t.n[b],t.n[c],t2);
+		clerp(&newt2.c[2],t.c[b],t.c[c],t2);
+		newt2.t[2].s = lerp(t.t[b].s,t.t[c].s,t2);
+		newt2.t[2].t = lerp(t.t[b].t,t.t[c].t,t2);
+		drawclippedtriangle(newt2);
+	}
+	else drawclippedtriangle(t);
 }
 
 pixel_t clearcolor = {16,16,16,255};
-float cleardepth = INFINITY;
 
 int showfps = 1;
 int showhelp = 1;
@@ -366,7 +462,7 @@ void rendermodel( void )
 	for ( i=0; i<screen.width*screen.height; i++ )
 	{
 		screen.color[i] = clearcolor;
-		screen.depth[i] = cleardepth;
+		screen.depth[i] = screen.zfar;
 	}
 	mat_t fulltransform;
 	vect_t basev[3], transv[3];
