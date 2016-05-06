@@ -13,7 +13,7 @@
 #include <time.h>
 #include "rastertest.h"
 
-const char helptext[8][32] =
+const char helptext[9][64] =
 {
 	"WASD : move horizontally",
 	"QE   : move vertically",
@@ -21,6 +21,7 @@ const char helptext[8][32] =
 	"F    : toggle fps display",
 	"X    : toggle fill/wireframe",
 	"Z    : toggle auto-rotate",
+	"C    : toggle no/back/front face culling",
 	"F1   : toggle this text",
 	"ESC  : quit"
 };
@@ -40,8 +41,8 @@ vect_t cubenorm[6] =
 };
 coord_t cubecoord[4] =
 {
-	{1.f,1.f},{0.f,0.f},
-	{1.f,0.f},{0.f,1.f}
+	{4.f,4.f},{0.f,0.f},
+	{4.f,0.f},{0.f,4.f}
 };
 color_t cubecolor[8] =
 {
@@ -78,28 +79,14 @@ vect_t cuberot = {0.f,0.f,0.f,0.f};
 mat_t projection, translation, rotation;
 buffer_t screen = {0,0,0,640,480,0.01f,10.0f};
 
-pixel_t cubepixels[64] =
+pixel_t cubepixels[4] =
 {
-	{0,0,0,255},{255,255,255,255},{0,0,0,255},{255,255,255,255},
-	{0,0,0,255},{255,255,255,255},{0,0,0,255},{255,255,255,255},
-	{255,255,255,255},{0,0,0,255},{255,255,255,255},{0,0,0,255},
-	{255,255,255,255},{0,0,0,255},{255,255,255,255},{0,0,0,255},
-	{0,0,0,255},{255,255,255,255},{0,0,0,255},{255,255,255,255},
-	{0,0,0,255},{255,255,255,255},{0,0,0,255},{255,255,255,255},
-	{255,255,255,255},{0,0,0,255},{255,255,255,255},{0,0,0,255},
-	{255,255,255,255},{0,0,0,255},{255,255,255,255},{0,0,0,255},
-	{0,0,0,255},{255,255,255,255},{0,0,0,255},{255,255,255,255},
-	{0,0,0,255},{255,255,255,255},{0,0,0,255},{255,255,255,255},
-	{255,255,255,255},{0,0,0,255},{255,255,255,255},{0,0,0,255},
-	{255,255,255,255},{0,0,0,255},{255,255,255,255},{0,0,0,255},
-	{0,0,0,255},{255,255,255,255},{0,0,0,255},{255,255,255,255},
-	{0,0,0,255},{255,255,255,255},{0,0,0,255},{255,255,255,255},
-	{255,255,255,255},{0,0,0,255},{255,255,255,255},{0,0,0,255},
-	{255,255,255,255},{0,0,0,255},{255,255,255,255},{0,0,0,255},
+	{0,0,0,255},{255,255,255,255},
+	{255,255,255,255},{0,0,0,255}
 };
 texture_t cubetex =
 {
-	cubepixels,8,8,0,TXCLAMP,TXCLAMP,{0.f,0.f,0.f,1.f}
+	cubepixels,2,2,0,TXWRAP,TXWRAP,{0.f,0.f,0.f,1.f}
 };
 
 /* FPS helper code */
@@ -171,7 +158,33 @@ void drawline( int x0, int x1, int y0, int y1, color_t c )
 
 void sampletexture( color_t *o, coord_t c, texture_t t )
 {
-	int cx = floorf(c.s*t.width), cy = floorf(c.t*t.height);
+	int cx = 0, cy = 0;
+	if ( t.bu == TXCLAMP ) cx = c.s*t.width;
+	else if ( t.bu == TXWRAP ) cx = (c.s-floorf(c.s))*t.width;
+	else if ( t.bu == TXMIRROR )
+		cx = (1.f-fabs(1.f-fmod(fabs(c.s),2.f)))*t.width;
+	else if ( t.bu == TXBORDER )
+	{
+		cx = c.s*t.width;
+		if ( c.s >= 1.f || c.s < 0.f )
+		{
+			*o = t.border;
+			return;
+		}
+	}
+	if ( t.bv == TXCLAMP ) cy = c.t*t.height;
+	else if ( t.bv == TXWRAP ) cy = (c.t-floorf(c.t))*t.height;
+	else if ( t.bv == TXMIRROR )
+		cy = (1.f-fabs(1.f-fmod(fabs(c.t),2.f)))*t.height;
+	else if ( t.bv == TXBORDER )
+	{
+		cy = c.t*t.height;
+		if ( c.t >= 1.f || c.t < 0.f )
+		{
+			*o = t.border;
+			return;
+		}
+	}
 	cx = clamp(cx,0,t.width-1);
 	cy = clamp(cy,0,t.height-1);
 	o->r = t.data[cx+cy*t.width].r/255.f;
@@ -260,6 +273,8 @@ void filltriangle( px_t p[3], coord_t tc[3], color_t c[3] )
 	}
 }
 
+int culling = 1;
+
 void drawclippedtriangle( tri_t t )
 {
 	px_t pts[3] =
@@ -282,7 +297,8 @@ void drawclippedtriangle( tri_t t )
 	ac.y = pts[2].y-pts[0].y;
 	ac.z = pts[2].d-pts[0].d;
 	cross(&facet,ab,ac);
-	if ( facet.z < 0.f ) return;
+	if ( (culling == 1) && (facet.z < 0.f) ) return;
+	if ( (culling == 2) && facet.z > 0.f ) return;
 	color_t cols[3] = {t.c[0],t.c[1],t.c[2]};
 	coord_t coords[3] = {t.t[0],t.t[1],t.t[2]};
 	filltriangle(pts,coords,cols);
@@ -340,9 +356,8 @@ void drawtriangle( tri_t t, unsigned char wireframe )
 {
 	if ( wireframe )
 	{
-		clipanddrawwire(t.v[0],t.v[1]);
-		clipanddrawwire(t.v[1],t.v[2]);
-		clipanddrawwire(t.v[2],t.v[0]);
+		#pragma omp parallel for
+		for ( int i=0; i<3; i++ ) clipanddrawwire(t.v[i],t.v[(i+1)%3]);
 		return;
 	}
 	t.v[0].z *= -1;
@@ -458,11 +473,15 @@ int autorot = 0;
 
 void rendermodel( void )
 {
-	int i;
-	for ( i=0; i<screen.width*screen.height; i++ )
+	int x, y;
+	#pragma omp parallel for
+	for ( y=0; y<screen.height; y++ )
 	{
-		screen.color[i] = clearcolor;
-		screen.depth[i] = screen.zfar;
+		for ( x=0; x<screen.width; x++ )
+		{
+			screen.color[y*screen.width+x] = clearcolor;
+			screen.depth[y*screen.width+x] = screen.zfar;
+		}
 	}
 	mat_t fulltransform;
 	vect_t basev[3], transv[3];
@@ -470,9 +489,9 @@ void rendermodel( void )
 	fulltransform = rotation;
 	mmul(&fulltransform,fulltransform,translation);
 	mmul(&fulltransform,fulltransform,projection);
+	#pragma omp parallel for
 	for ( int i=0; i<cube.ntri; i++ )
 	{
-		#pragma omp parallel for
 		for ( int j=0; j<3; j++ )
 		{
 			basev[j].x = cube.vertices[cube.triangles[i].v[j]].x;
@@ -566,6 +585,8 @@ int main( void )
 					showfps = !showfps;
 				else if ( e.key.keysym.sym == SDLK_F1 )
 					showhelp = !showhelp;
+				else if ( e.key.keysym.sym == SDLK_c )
+					culling = (culling<2)?(culling+1):0;
 			}
 		}
 		mat_t rotx, roty;
@@ -591,8 +612,8 @@ int main( void )
 		if ( showhelp )
 		{
 			SDL_Rect dr =
-				{0,screen.height-TTF_FontHeight(fon)*8,-1,-1};
-			for ( int i=0; i<8; i++ )
+				{0,screen.height-TTF_FontHeight(fon)*9,-1,-1};
+			for ( int i=0; i<9; i++ )
 			{
 				txt = TTF_RenderUTF8_Blended(fon,helptext[i],
 					fpscol);
