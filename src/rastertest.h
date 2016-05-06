@@ -104,96 +104,96 @@ typedef struct
 	float radius;
 	color_t color;
 } light_t;
-inline void vadd( vect_t *o, vect_t a, vect_t b )
+void vadd( vect_t *o, vect_t a, vect_t b )
 {
 	o->x = a.x+b.x;
 	o->y = a.y+b.y;
 	o->z = a.z+b.z;
 	o->w = a.w+b.w;
 }
-inline void vsub( vect_t *o, vect_t a, vect_t b )
+void vsub( vect_t *o, vect_t a, vect_t b )
 {
 	o->x = a.x-b.x;
 	o->y = a.y-b.y;
 	o->z = a.z-b.z;
 	o->w = a.w-b.w;
 }
-inline void vmul( vect_t *o, vect_t a, vect_t b )
+void vmul( vect_t *o, vect_t a, vect_t b )
 {
 	o->x = a.x*b.x;
 	o->y = a.y*b.y;
 	o->z = a.z*b.z;
 	o->w = a.w*b.w;
 }
-inline void vdiv( vect_t *o, vect_t a, vect_t b )
+void vdiv( vect_t *o, vect_t a, vect_t b )
 {
 	o->x = a.x/b.x;
 	o->y = a.y/b.y;
 	o->z = a.z/b.z;
 	o->w = a.w/b.w;
 }
-inline void vscale( vect_t *o, vect_t a, float b )
+void vscale( vect_t *o, vect_t a, float b )
 {
 	o->x = a.x*b;
 	o->y = a.y*b;
 	o->z = a.z*b;
 	o->w = a.w*b;
 }
-inline void vmat( vect_t *o, mat_t a, vect_t b )
+void vmat( vect_t *o, mat_t a, vect_t b )
 {
 	o->x = a.c[0][0]*b.x+a.c[1][0]*b.y+a.c[2][0]*b.z+a.c[3][0]*b.w;
 	o->y = a.c[0][1]*b.x+a.c[1][1]*b.y+a.c[2][1]*b.z+a.c[3][1]*b.w;
 	o->z = a.c[0][2]*b.x+a.c[1][2]*b.y+a.c[2][2]*b.z+a.c[3][2]*b.w;
 	o->w = a.c[0][3]*b.x+a.c[1][3]*b.y+a.c[2][3]*b.z+a.c[3][3]*b.w;
 }
-inline void mident( mat_t *o )
+void mident( mat_t *o )
 {
 	int i,j;
 	for ( i=0; i<4; i++ ) for ( j=0; j<4; j++ )
 		o->c[i][j] = (i==j)?1.f:0.f;
 }
-inline void mmul( mat_t *o, mat_t a, mat_t b )
+void mmul( mat_t *o, mat_t a, mat_t b )
 {
 	int i,j;
 	for ( i=0; i<4; i++ ) for ( j=0; j<4; j++ )
 		o->c[i][j] = a.c[i][0]*b.c[0][j]+a.c[i][1]*b.c[1][j]
 			+a.c[i][2]*b.c[2][j]+a.c[i][3]*b.c[3][j];
 }
-inline void mscale( mat_t *o, mat_t a, float b )
+void mscale( mat_t *o, mat_t a, float b )
 {
 	int i,j;
 	for ( i=0; i<4; i++ ) for ( j=0; j<4; j++ )
 		o->c[i][j] = a.c[i][j]*b;
 }
-inline void cadd( color_t *o, color_t a, color_t b )
+void cadd( color_t *o, color_t a, color_t b )
 {
 	o->r = a.r+b.r;
 	o->g = a.g+b.g;
 	o->b = a.b+b.b;
 	o->a = a.a+b.a;
 }
-inline void csub( color_t *o, color_t a, color_t b )
+void csub( color_t *o, color_t a, color_t b )
 {
 	o->r = a.r-b.r;
 	o->g = a.g-b.g;
 	o->b = a.b-b.b;
 	o->a = a.a-b.a;
 }
-inline void cmul( color_t *o, color_t a, color_t b )
+void cmul( color_t *o, color_t a, color_t b )
 {
 	o->r = a.r*b.r;
 	o->g = a.g*b.g;
 	o->b = a.b*b.b;
 	o->a = a.a*b.a;
 }
-inline void cdiv( color_t *o, color_t a, color_t b )
+void cdiv( color_t *o, color_t a, color_t b )
 {
 	o->r = a.r/b.r;
 	o->g = a.g/b.g;
 	o->b = a.b/b.b;
 	o->a = a.a/b.a;
 }
-inline void cscale( color_t *o, color_t a, float b )
+void cscale( color_t *o, color_t a, float b )
 {
 	o->r = a.r*b;
 	o->g = a.g*b;
@@ -277,35 +277,35 @@ void translate( mat_t *o, vect_t offset )
 #define max(a,b) (((a)>(b))?(a):(b))
 #define clamp(a,b,c) (((a)>(b))?((a)>(c))?(c):(a):(b))
 #define lerp(a,b,f) ((a)*(1.f-(f))+(b)*(f))
-inline void vlerp( vect_t *o, vect_t a, vect_t b, float f )
+void vlerp( vect_t *o, vect_t a, vect_t b, float f )
 {
 	o->x = lerp(a.x,b.x,f);
 	o->y = lerp(a.y,b.y,f);
 	o->z = lerp(a.z,b.z,f);
 	o->w = lerp(a.w,b.w,f);
 }
-inline void clerp( color_t *o, color_t a, color_t b, float f )
+void clerp( color_t *o, color_t a, color_t b, float f )
 {
 	o->r = lerp(a.r,b.r,f);
 	o->g = lerp(a.g,b.g,f);
 	o->b = lerp(a.b,b.b,f);
 	o->a = lerp(a.a,b.a,f);
 }
-inline float vsize( vect_t v )
+float vsize( vect_t v )
 {
 	return sqrt(powf(v.x,2.f)+powf(v.y,2.f)+powf(v.z,2.f));
 }
-inline void cross( vect_t *a, vect_t b, vect_t c )
+void cross( vect_t *a, vect_t b, vect_t c )
 {
 	a->x = b.y*c.z-b.z*c.y;
 	a->y = b.z*c.x-b.x*c.z;
 	a->z = b.x*c.y-b.y*c.x;
 }
-inline float dot( vect_t a, vect_t b )
+float dot( vect_t a, vect_t b )
 {
 	return a.x*b.x+a.y*b.y+a.z*b.z;
 }
-inline void normalize( vect_t *a )
+void normalize( vect_t *a )
 {
 	float scale = sqrtf(powf(a->x,2.f)+powf(a->y,2.f)+powf(a->z,2.f));
 	a->x /= scale;
