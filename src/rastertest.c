@@ -6,6 +6,7 @@
 */
 #define _DEFAULT_SOURCE
 
+#include <omp.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <stdlib.h>
@@ -212,10 +213,12 @@ void filltriangle( px_t p[3], coord_t tc[3], color_t c[3] )
 	p[1].d = 1.f/p[1].d;
 	p[2].d = 1.f/p[2].d;
 	float area = afn(p[0],p[1],p[2]);
-	#pragma omp parallel for
-	for ( int y=minb.y; y<maxb.y; y++ )
+	const int this_is_invariant_i_swear = maxb.y;
+	const int this_is_also_invariant_i_swear = maxb.x;
+	#pragma omp parallel for collapse(2)
+	for ( int y=minb.y; y<this_is_invariant_i_swear; y++ )
 	{
-		for ( int x=minb.x; x<maxb.x; x++ )
+		for ( int x=minb.x; x<this_is_also_invariant_i_swear; x++ )
 		{
 			px_t px = {x+0.5f,y+0.5f,0,0};
 			vect_t q =
@@ -225,37 +228,34 @@ void filltriangle( px_t p[3], coord_t tc[3], color_t c[3] )
 				afn(p[0],p[1],px)/area,
 				0.f
 			};
-			if ( (q.x>=0.f) && (q.y>=0.f) && (q.z>=0.f) )
+			if ( (q.x<0.f) || (q.y<0.f) || (q.z<0.f) ) continue;
+			int coord = x+y*screen.width;
+			float dep = screen.depth[coord];
+			float pd = 1.f/(q.x*p[0].d+q.y*p[1].d+q.z*p[2].d);
+			if ( (pd > dep) ) continue;
+			color_t pc =
 			{
-				int coord = x+y*screen.width;
-				float dep = screen.depth[coord];
-				float pd = 1.f/(q.x*p[0].d+q.y*p[1].d
-					+q.z*p[2].d);
-				if ( (pd > dep) ) continue;
-				color_t pc =
-				{
-					q.x*c[0].r+q.y*c[1].r+q.z*c[2].r,
-					q.x*c[0].g+q.y*c[1].g+q.z*c[2].g,
-					q.x*c[0].b+q.y*c[1].b+q.z*c[2].b,
-					q.x*c[0].a+q.y*c[1].a+q.z*c[2].a,
-				};
-				pc.r *= pd;
-				pc.g *= pd;
-				pc.b *= pd;
-				pc.a *= pd;
-				coord_t tx =
-				{
-					q.x*tc[0].s+q.y*tc[1].s+q.z*tc[2].s,
-					q.x*tc[0].t+q.y*tc[1].t+q.z*tc[2].t
-				};
-				tx.s *= pd;
-				tx.t *= pd;
-				sampletexture(&pc,tx,cubetex);
-				px.x = x;
-				px.y = y;
-				px.d = pd;
-				putpixel(px,pc);
-			}
+				q.x*c[0].r+q.y*c[1].r+q.z*c[2].r,
+				q.x*c[0].g+q.y*c[1].g+q.z*c[2].g,
+				q.x*c[0].b+q.y*c[1].b+q.z*c[2].b,
+				q.x*c[0].a+q.y*c[1].a+q.z*c[2].a,
+			};
+			pc.r *= pd;
+			pc.g *= pd;
+			pc.b *= pd;
+			pc.a *= pd;
+			coord_t tx =
+			{
+				q.x*tc[0].s+q.y*tc[1].s+q.z*tc[2].s,
+				q.x*tc[0].t+q.y*tc[1].t+q.z*tc[2].t
+			};
+			tx.s *= pd;
+			tx.t *= pd;
+			sampletexture(&pc,tx,cubetex);
+			px.x = x;
+			px.y = y;
+			px.d = pd;
+			putpixel(px,pc);
 		}
 	}
 }
@@ -458,12 +458,13 @@ int autorot = 0;
 
 void rendermodel( void )
 {
-	int i;
-	for ( i=0; i<screen.width*screen.height; i++ )
-	{
+	const int this_is_invariant_i_swear = screen.width*screen.height;
+	#pragma omp parallel for
+	for ( int i=0; i<this_is_invariant_i_swear; i++ )
 		screen.color[i] = clearcolor;
+	#pragma omp parallel for
+	for ( int i=0; i<this_is_invariant_i_swear; i++ )
 		screen.depth[i] = screen.zfar;
-	}
 	mat_t fulltransform;
 	vect_t basev[3], transv[3];
 	vect_t basen[3], transn[3];
@@ -472,7 +473,6 @@ void rendermodel( void )
 	mmul(&fulltransform,fulltransform,projection);
 	for ( int i=0; i<cube.ntri; i++ )
 	{
-		#pragma omp parallel for
 		for ( int j=0; j<3; j++ )
 		{
 			basev[j].x = cube.vertices[cube.triangles[i].v[j]].x;

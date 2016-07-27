@@ -4,7 +4,7 @@ source ./.aosbuild
 aos_compiler ${CC:-clang}
 aos_pkgconfig ${PKGCONF:-pkg-config}
 aos_cflags -march=native -std=c11 -O3 -ffast-math -funroll-loops -fopenmp -pipe -Wall -Wextra -Werror -pedantic
-aos_lflags $CFLAGS -lm
+aos_lflags $CFLAGS -lm -lomp
 aos_pkg sdl2 SDL2_ttf
 aos_bin rastertest
 aos_src src/*.c
