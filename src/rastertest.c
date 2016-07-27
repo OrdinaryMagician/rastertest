@@ -356,7 +356,6 @@ void drawtriangle( tri_t t, unsigned char wireframe )
 {
 	if ( wireframe )
 	{
-		#pragma omp parallel for
 		for ( int i=0; i<3; i++ ) clipanddrawwire(t.v[i],t.v[(i+1)%3]);
 		return;
 	}
@@ -486,7 +485,6 @@ void rendermodel( void )
 	fulltransform = rotation;
 	mmul(&fulltransform,fulltransform,translation);
 	mmul(&fulltransform,fulltransform,projection);
-	#pragma omp parallel for
 	for ( int i=0; i<cube.ntri; i++ )
 	{
 		for ( int j=0; j<3; j++ )
