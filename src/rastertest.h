@@ -90,6 +90,20 @@ typedef struct
 	face_t *triangles;
 	int nvert, nnorm, ncoord, ncolor, nmat, ntri;
 } model_t;
+typedef struct
+{
+	px_t fragdata;
+	vect_t position, normal;
+	coord_t txcoord;
+	color_t color;
+	material_t *material;
+} frag_t;
+typedef struct
+{
+	vect_t position;
+	float radius;
+	color_t color;
+} light_t;
 void vadd( vect_t *o, vect_t a, vect_t b )
 {
 	o->x = a.x+b.x;
