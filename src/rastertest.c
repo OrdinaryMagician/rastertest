@@ -58,24 +58,24 @@ color_t cubecolor[8] =
 };
 face_t cubefaces[12] =
 {
-	{{1,3,0},{0,0,0},{0,1,2},{1,1,1},0},
-	{{7,5,4},{1,1,1},{3,2,0},{2,2,2},0},
-	{{4,1,0},{2,2,2},{0,1,2},{3,3,3},0},
-	{{5,2,1},{3,3,3},{3,2,1},{4,4,4},0},
-	{{2,7,3},{4,4,4},{3,2,0},{5,5,5},0},
-	{{0,7,4},{5,5,5},{3,2,1},{6,6,6},0},
-	{{1,2,3},{0,0,0},{0,3,1},{1,1,1},0},
-	{{7,6,5},{1,1,1},{3,1,2},{2,2,2},0},
-	{{4,5,1},{2,2,2},{0,3,1},{3,3,3},0},
-	{{5,6,2},{3,3,3},{3,0,2},{4,4,4},0},
-	{{2,6,7},{4,4,4},{3,1,2},{5,5,5},0},
-	{{0,3,7},{5,5,5},{3,0,2},{6,6,6},0}
+	{{1,3,0},{0,0,0},{0,1,2},{1,3,0},0},
+	{{7,5,4},{1,1,1},{3,2,0},{7,5,4},0},
+	{{4,1,0},{2,2,2},{0,1,2},{4,1,0},0},
+	{{5,2,1},{3,3,3},{3,2,1},{5,2,1},0},
+	{{2,7,3},{4,4,4},{3,2,0},{2,7,3},0},
+	{{0,7,4},{5,5,5},{3,2,1},{0,7,4},0},
+	{{1,2,3},{0,0,0},{0,3,1},{1,2,3},0},
+	{{7,6,5},{1,1,1},{3,1,2},{7,6,5},0},
+	{{4,5,1},{2,2,2},{0,3,1},{4,5,1},0},
+	{{5,6,2},{3,3,3},{3,0,2},{5,6,2},0},
+	{{2,6,7},{4,4,4},{3,1,2},{2,6,7},0},
+	{{0,3,7},{5,5,5},{3,0,2},{0,3,7},0}
 };
 model_t cube =
 {
 	cubevect,cubenorm,cubecoord,cubecolor,0,cubefaces,8,6,4,8,0,12
 };
-vect_t cubepos = {0.f,0.f,-4.f,1.f};
+vect_t cubepos = {0.f,0.f,-5.f,1.f};
 vect_t cuberot = {0.f,0.f,0.f,0.f};
 mat_t projection, translation, rotation;
 buffer_t screen = {0,0,0,640,480,0.01f,10.0f};
@@ -118,10 +118,10 @@ void putpixel( px_t p, color_t c )
 		return;
 	int coord = p.x+p.y*screen.width;
 	screen.depth[coord] = p.d;
-	screen.color[coord].r = c.r*255.f;
-	screen.color[coord].g = c.g*255.f;
-	screen.color[coord].b = c.b*255.f;
-	screen.color[coord].a = c.a*255.f;
+	screen.color[coord].r = saturate(c.r)*255.f;
+	screen.color[coord].g = saturate(c.g)*255.f;
+	screen.color[coord].b = saturate(c.b)*255.f;
+	screen.color[coord].a = saturate(c.a)*255.f;
 }
 
 void drawline( int x0, int x1, int y0, int y1, color_t c )
@@ -196,7 +196,36 @@ void sampletexture( color_t *o, coord_t c, texture_t t )
 
 #define afn(a,b,c) ((c.x-a.x)*(b.y-a.y)-(c.y-a.y)*(b.x-a.x))
 
-void filltriangle( px_t p[3], coord_t tc[3], color_t c[3] )
+void fragmentprogram( color_t *out, frag_t data )
+{
+	color_t res;
+	sampletexture(&res,data.txcoord,cubetex);
+	cmul(out,res,data.color);
+	vect_t light = {0,0,16,0};
+	vect_t eye = {0,0,1,0};
+	vsub(&light,light,cubepos);
+	vsub(&eye,eye,cubepos);
+	vsub(&light,light,data.position);
+	vsub(&eye,eye,data.position);
+	normalize(&light);
+	normalize(&eye);
+	vect_t ref;
+	reflect(&ref,light,data.normal);
+	vscale(&ref,ref,-1.0);
+	normalize(&ref);
+	color_t amb = {0.03,0.03,0.03,1.0};
+	color_t diff = {1.0,1.0,1.0,1.0};
+	cscale(&diff,diff,max(dot(data.normal,light),0.0));
+	color_t spec = {0.3,0.3,0.3,1.0};
+	cscale(&spec,spec,powf(max(dot(ref,eye),0.0),4.0));
+	color_t lit;
+	cadd(&lit,amb,diff);
+	cmul(out,*out,lit);
+	cadd(out,*out,spec);
+}
+
+void filltriangle( px_t p[3], coord_t tc[3], color_t c[3], vect_t vp[3],
+	vect_t vn[3] )
 {
 	px_t minb, maxb;
 	maxb.x = clamp(max(p[0].x,max(p[1].x,p[2].x)),0,screen.width);
@@ -204,34 +233,28 @@ void filltriangle( px_t p[3], coord_t tc[3], color_t c[3] )
 	minb.x = clamp(min(p[0].x,min(p[1].x,p[2].x)),0,screen.width);
 	minb.y = clamp(min(p[0].y,min(p[1].y,p[2].y)),0,screen.height);
 	if ( (maxb.x == minb.x) || (maxb.y == minb.y) ) return;
-	tc[0].s /= p[0].d;
-	tc[0].t /= p[0].d;
-	tc[1].s /= p[1].d;
-	tc[1].t /= p[1].d;
-	tc[2].s /= p[2].d;
-	tc[2].t /= p[2].d;
-	c[0].r /= p[0].d;
-	c[0].g /= p[0].d;
-	c[0].b /= p[0].d;
-	c[0].a /= p[0].d;
-	c[1].r /= p[1].d;
-	c[1].g /= p[1].d;
-	c[1].b /= p[1].d;
-	c[1].a /= p[1].d;
-	c[2].r /= p[2].d;
-	c[2].g /= p[2].d;
-	c[2].b /= p[2].d;
-	c[2].a /= p[2].d;
-	p[0].d = 1.f/p[0].d;
-	p[1].d = 1.f/p[1].d;
-	p[2].d = 1.f/p[2].d;
-	float area = afn(p[0],p[1],p[2]);
-	const int this_is_invariant_i_swear = maxb.y;
-	const int this_is_also_invariant_i_swear = maxb.x;
-	#pragma omp parallel for collapse(2)
-	for ( int y=minb.y; y<this_is_invariant_i_swear; y++ )
+	for ( int i=0; i<3; i++ )
 	{
-		for ( int x=minb.x; x<this_is_also_invariant_i_swear; x++ )
+		tc[i].s /= p[i].d;
+		tc[i].t /= p[i].d;
+		c[i].r /= p[i].d;
+		c[i].g /= p[i].d;
+		c[i].b /= p[i].d;
+		c[i].a /= p[i].d;
+		vp[i].x /= p[i].d;
+		vp[i].y /= p[i].d;
+		vp[i].z /= p[i].d;
+		vp[i].w /= p[i].d;
+		vn[i].x /= p[i].d;
+		vn[i].y /= p[i].d;
+		vn[i].z /= p[i].d;
+		vn[i].w /= p[i].d;
+	}
+	for ( int i=0; i<3; i++ ) p[i].d = 1.f/p[i].d;
+	float area = afn(p[0],p[1],p[2]);
+	for ( int y=minb.y; y<maxb.y; y++ )
+	{
+		for ( int x=minb.x; x<maxb.x; x++ )
 		{
 			px_t px = {x+0.5f,y+0.5f,0,0};
 			vect_t q =
@@ -246,28 +269,37 @@ void filltriangle( px_t p[3], coord_t tc[3], color_t c[3] )
 			float dep = screen.depth[coord];
 			float pd = 1.f/(q.x*p[0].d+q.y*p[1].d+q.z*p[2].d);
 			if ( (pd > dep) ) continue;
-			color_t pc =
-			{
-				q.x*c[0].r+q.y*c[1].r+q.z*c[2].r,
-				q.x*c[0].g+q.y*c[1].g+q.z*c[2].g,
-				q.x*c[0].b+q.y*c[1].b+q.z*c[2].b,
-				q.x*c[0].a+q.y*c[1].a+q.z*c[2].a,
-			};
-			pc.r *= pd;
-			pc.g *= pd;
-			pc.b *= pd;
-			pc.a *= pd;
 			coord_t tx =
 			{
-				q.x*tc[0].s+q.y*tc[1].s+q.z*tc[2].s,
-				q.x*tc[0].t+q.y*tc[1].t+q.z*tc[2].t
+				pd*(q.x*tc[0].s+q.y*tc[1].s+q.z*tc[2].s),
+				pd*(q.x*tc[0].t+q.y*tc[1].t+q.z*tc[2].t)
 			};
-			tx.s *= pd;
-			tx.t *= pd;
-			sampletexture(&pc,tx,cubetex);
+			color_t pc =
+			{
+				pd*(q.x*c[0].r+q.y*c[1].r+q.z*c[2].r),
+				pd*(q.x*c[0].g+q.y*c[1].g+q.z*c[2].g),
+				pd*(q.x*c[0].b+q.y*c[1].b+q.z*c[2].b),
+				pd*(q.x*c[0].a+q.y*c[1].a+q.z*c[2].a)
+			};
+			vect_t fp =
+			{
+				pd*(q.x*vp[0].x+q.y*vp[1].x+q.z*vp[2].x),
+				pd*(q.x*vp[0].y+q.y*vp[1].y+q.z*vp[2].y),
+				pd*(q.x*vp[0].z+q.y*vp[1].z+q.z*vp[2].z),
+				pd*(q.x*vp[0].w+q.y*vp[1].w+q.z*vp[2].w)
+			};
+			vect_t fn =
+			{
+				pd*(q.x*vn[0].x+q.y*vn[1].x+q.z*vn[2].x),
+				pd*(q.x*vn[0].y+q.y*vn[1].y+q.z*vn[2].y),
+				pd*(q.x*vn[0].z+q.y*vn[1].z+q.z*vn[2].z),
+				pd*(q.x*vn[0].w+q.y*vn[1].w+q.z*vn[2].w)
+			};
 			px.x = x;
 			px.y = y;
 			px.d = pd;
+			frag_t frag = {px,fp,fn,tx,pc,0};
+			fragmentprogram(&pc,frag);
 			putpixel(px,pc);
 		}
 	}
@@ -301,7 +333,9 @@ void drawclippedtriangle( tri_t t )
 	if ( (culling == 2) && facet.z > 0.f ) return;
 	color_t cols[3] = {t.c[0],t.c[1],t.c[2]};
 	coord_t coords[3] = {t.t[0],t.t[1],t.t[2]};
-	filltriangle(pts,coords,cols);
+	vect_t pos[3] = {t.v[0],t.v[1],t.v[2]};
+	vect_t norm[3] = {t.n[0],t.n[1],t.n[2]};
+	filltriangle(pts,coords,cols,pos,norm);
 }
 
 void clipanddrawwire( vect_t a, vect_t b )
@@ -468,16 +502,14 @@ pixel_t clearcolor = {16,16,16,255};
 int showfps = 1;
 int showhelp = 1;
 int drawwire = 0;
-int autorot = 0;
+int autorot = 1;
 
 void rendermodel( void )
 {
-	const int this_is_invariant_i_swear = screen.width*screen.height;
-	#pragma omp parallel for
-	for ( int i=0; i<this_is_invariant_i_swear; i++ )
+	/* and here we have buffer clearing, where 50% of the fps go die */
+	for ( int i=0; i<screen.width*screen.height; i++ )
 		screen.color[i] = clearcolor;
-	#pragma omp parallel for
-	for ( int i=0; i<this_is_invariant_i_swear; i++ )
+	for ( int i=0; i<screen.width*screen.height; i++ )
 		screen.depth[i] = screen.zfar;
 	mat_t fulltransform;
 	vect_t basev[3], transv[3];
@@ -510,7 +542,7 @@ void rendermodel( void )
 			{cube.colors[cube.triangles[i].c[0]],
 			cube.colors[cube.triangles[i].c[1]],
 			cube.colors[cube.triangles[i].c[2]]},
-			&cube.materials[cube.triangles[i].mat]
+			&cube.materials[cube.triangles[i].mat],
 		};
 		if ( drawwire < 2 ) drawtriangle(face,0);
 		if ( drawwire > 0 ) drawtriangle(face,1);
@@ -538,11 +570,11 @@ int main( void )
 	float frame = 0.f, fps = NAN, fpsmin = INFINITY, fpsmax = -INFINITY,
 		fpsavg = 0.f;
 	long tick, tock;
-	float fh = tanf(90.f/360.f*PI)*screen.znear,
+	float fh = tanf(70.f/360.f*PI)*screen.znear,
 		fw = fh*(screen.width/(float)screen.height);
 	frustum(&projection,-fw,fw,-fh,fh,screen.znear,screen.zfar);
 	char fpst[16];
-	float rx = 0, ry = 0;
+	float rx = 0, rz = 0;
 	while ( active )
 	{
 		tick = ticker();
@@ -550,9 +582,7 @@ int main( void )
 		{	if ( e.type == SDL_QUIT ) active = 0;
 			if ( e.type == SDL_KEYDOWN )
 			{
-				if ( e.key.keysym.sym == SDLK_ESCAPE )
-					active = 0;
-				else if ( e.key.keysym.sym == SDLK_a )
+				if ( e.key.keysym.sym == SDLK_a )
 					cubepos.x -= 0.1f;
 				else if ( e.key.keysym.sym == SDLK_d )
 					cubepos.x += 0.1f;
@@ -565,13 +595,18 @@ int main( void )
 				else if ( e.key.keysym.sym == SDLK_s )
 					cubepos.z -= 0.1f;
 				else if ( e.key.keysym.sym == SDLK_LEFT )
-					ry += 0.025f;
-				else if ( e.key.keysym.sym == SDLK_RIGHT )
-					ry -= 0.025f;
-				else if ( e.key.keysym.sym == SDLK_UP )
-					rx -= 0.025f;
-				else if ( e.key.keysym.sym == SDLK_DOWN )
 					rx += 0.025f;
+				else if ( e.key.keysym.sym == SDLK_RIGHT )
+					rx -= 0.025f;
+				else if ( e.key.keysym.sym == SDLK_UP )
+					rz -= 0.025f;
+				else if ( e.key.keysym.sym == SDLK_DOWN )
+					rz += 0.025f;
+				/* no repeated input beyond this point due to a
+				   SDL2 bug */
+				if ( e.key.repeat ) break;
+				if ( e.key.keysym.sym == SDLK_ESCAPE )
+					active = 0;
 				else if ( e.key.keysym.sym == SDLK_z )
 					autorot = !autorot;
 				else if ( e.key.keysym.sym == SDLK_x )
@@ -584,22 +619,22 @@ int main( void )
 					culling = (culling<2)?(culling+1):0;
 			}
 		}
-		mat_t rotx, roty;
+		mat_t rotx, rotz;
 		if ( autorot )
 		{
-			rx += frame;
-			ry += frame;
+			rx -= frame;
+			rz -= frame;
 		}
-		rotate(&rotx,50.f*rx,ROT_X);
-		rotate(&roty,80.f*ry,ROT_Y);
-		mmul(&rotation,roty,rotx);
+		rotate(&rotx,90.f*rx,ROT_Y);
+		rotate(&rotz,90.f*rz,ROT_Z);
+		mmul(&rotation,rotz,rotx);
 		translate(&translation,cubepos);
 		rendermodel();
 		SDL_BlitSurface(fb,0,scr,0);
 		SDL_Surface *txt;
 		if ( showfps )
 		{
-			snprintf(fpst,15,"%.2f FPS",fps);
+			snprintf(fpst,15,"%.2f FPS",fpsavg);
 			txt = TTF_RenderText_Blended(fon,fpst,fpscol);
 			SDL_BlitSurface(txt,0,scr,0);
 			SDL_FreeSurface(txt);

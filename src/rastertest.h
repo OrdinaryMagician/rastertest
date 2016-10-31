@@ -312,3 +312,10 @@ void normalize( vect_t *a )
 	a->y /= scale;
 	a->z /= scale;
 }
+void reflect( vect_t *o, vect_t a, vect_t b )
+{
+	float dotp = 2.0*dot(a,b);
+	o->x = a.x-dotp*b.x;
+	o->y = a.y-dotp*b.y;
+	o->z = a.z-dotp*b.z;
+}
