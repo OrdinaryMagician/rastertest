@@ -75,21 +75,11 @@ typedef struct
 } material_t;
 typedef struct
 {
-	vect_t v[3], n[3];
+	vect_t v[3], w[3], n[3];
 	coord_t t[3];
 	color_t c[3];
 	material_t *m;
 } tri_t;
-typedef struct
-{
-	vect_t *vertices;
-	vect_t *normals;
-	coord_t *txcoords;
-	color_t *colors;
-	material_t *materials;
-	face_t *triangles;
-	int nvert, nnorm, ncoord, ncolor, nmat, ntri;
-} model_t;
 typedef struct
 {
 	px_t fragdata;
@@ -104,6 +94,18 @@ typedef struct
 	float radius;
 	color_t color;
 } light_t;
+typedef void(prog_t)( frag_t data );
+typedef struct
+{
+	vect_t *vertices;
+	vect_t *normals;
+	coord_t *txcoords;
+	color_t *colors;
+	material_t *materials;
+	face_t *triangles;
+	int nvert, nnorm, ncoord, ncolor, nmat, ntri;
+	prog_t *prog;
+} model_t;
 void vadd( vect_t *o, vect_t a, vect_t b )
 {
 	o->x = a.x+b.x;

@@ -6,7 +6,6 @@
 */
 #define _DEFAULT_SOURCE
 
-#include <omp.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <stdlib.h>
@@ -71,14 +70,42 @@ face_t cubefaces[12] =
 	{{2,6,7},{4,4,4},{3,1,2},{2,6,7},0},
 	{{0,3,7},{5,5,5},{3,0,2},{0,3,7},0}
 };
+void cubefrag(frag_t);
 model_t cube =
 {
-	cubevect,cubenorm,cubecoord,cubecolor,0,cubefaces,8,6,4,8,0,12
+	cubevect,cubenorm,cubecoord,cubecolor,0,cubefaces,8,6,4,8,0,12,
+	cubefrag
 };
 vect_t cubepos = {0.f,0.f,-5.f,1.f};
 vect_t cuberot = {0.f,0.f,0.f,0.f};
+vect_t flatvect[4] =
+{
+	{-8.f, 0.f,-8.f,1.f},{ 8.f, 0.f,-8.f,1.f},
+	{-8.f, 0.f, 8.f,1.f},{ 8.f, 0.f, 8.f,1.f},
+};
+vect_t flatnorm[1] = {{0.f,-1.f,0.f,1.f}};
+coord_t flatcoord[4] =
+{
+	{0.f,0.f},{8.f,0.f},{0.f,8.f},{8.f,8.f},
+};
+color_t flatcolor[1] = {{0.5f,0.5f,0.5f,1.f}};
+face_t flatfaces[2] =
+{
+	{{0,1,2},{0,0,0},{0,1,2},{0,0,0},0},
+	{{1,3,2},{0,0,0},{1,3,2},{0,0,0},0}
+};
+void flatfrag(frag_t);
+model_t flat =
+{
+	flatvect,flatnorm,flatcoord,flatcolor,0,flatfaces,4,1,4,1,0,2,
+	flatfrag
+};
+vect_t flatpos = {0.f,2.f,-4.f,1.f};
+vect_t flatrot = {0.f,0.f,0.f,0.f};
 mat_t projection, translation, rotation;
-buffer_t screen = {0,0,0,640,480,0.01f,10.0f};
+buffer_t screen = {0,0,0,640,480,0.01f,1000.0f};
+
+vect_t lightpos = {-8.f,-16.f,8.f,1.f};
 
 pixel_t cubepixels[4] =
 {
@@ -196,16 +223,14 @@ void sampletexture( color_t *o, coord_t c, texture_t t )
 
 #define afn(a,b,c) ((c.x-a.x)*(b.y-a.y)-(c.y-a.y)*(b.x-a.x))
 
-void fragmentprogram( color_t *out, frag_t data )
+void cubefrag( frag_t data )
 {
 	color_t res;
 	sampletexture(&res,data.txcoord,cubetex);
-	cmul(out,res,data.color);
-	vect_t light = {0,0,16,0};
+	cmul(&res,res,data.color);
 	vect_t eye = {0,0,1,0};
-	vsub(&light,light,cubepos);
-	vsub(&eye,eye,cubepos);
-	vsub(&light,light,data.position);
+	vect_t light;
+	vsub(&light,lightpos,data.position);
 	vsub(&eye,eye,data.position);
 	normalize(&light);
 	normalize(&eye);
@@ -217,15 +242,21 @@ void fragmentprogram( color_t *out, frag_t data )
 	color_t diff = {1.0,1.0,1.0,1.0};
 	cscale(&diff,diff,max(dot(data.normal,light),0.0));
 	color_t spec = {0.3,0.3,0.3,1.0};
-	cscale(&spec,spec,powf(max(dot(ref,eye),0.0),4.0));
+	cscale(&spec,spec,powf(max(dot(ref,eye),0.0),16.0));
 	color_t lit;
 	cadd(&lit,amb,diff);
-	cmul(out,*out,lit);
-	cadd(out,*out,spec);
+	cmul(&res,res,lit);
+	cadd(&res,res,spec);
+	putpixel(data.fragdata,res);
+}
+
+void flatfrag( frag_t data )
+{
+	cubefrag(data);
 }
 
 void filltriangle( px_t p[3], coord_t tc[3], color_t c[3], vect_t vp[3],
-	vect_t vn[3] )
+	vect_t vn[3], prog_t *prog )
 {
 	px_t minb, maxb;
 	maxb.x = clamp(max(p[0].x,max(p[1].x,p[2].x)),0,screen.width);
@@ -299,15 +330,14 @@ void filltriangle( px_t p[3], coord_t tc[3], color_t c[3], vect_t vp[3],
 			px.y = y;
 			px.d = pd;
 			frag_t frag = {px,fp,fn,tx,pc,0};
-			fragmentprogram(&pc,frag);
-			putpixel(px,pc);
+			prog(frag);
 		}
 	}
 }
 
 int culling = 1;
 
-void drawclippedtriangle( tri_t t )
+void drawclippedtriangle( tri_t t, prog_t *program )
 {
 	px_t pts[3] =
 	{
@@ -333,9 +363,9 @@ void drawclippedtriangle( tri_t t )
 	if ( (culling == 2) && facet.z > 0.f ) return;
 	color_t cols[3] = {t.c[0],t.c[1],t.c[2]};
 	coord_t coords[3] = {t.t[0],t.t[1],t.t[2]};
-	vect_t pos[3] = {t.v[0],t.v[1],t.v[2]};
+	vect_t pos[3] = {t.w[0],t.w[1],t.w[2]};
 	vect_t norm[3] = {t.n[0],t.n[1],t.n[2]};
-	filltriangle(pts,coords,cols,pos,norm);
+	filltriangle(pts,coords,cols,pos,norm,program);
 }
 
 void clipanddrawwire( vect_t a, vect_t b )
@@ -386,7 +416,7 @@ void clipanddrawwire( vect_t a, vect_t b )
 	drawline(a.x,b.x,a.y,b.y,wire);
 }
 
-void drawtriangle( tri_t t, unsigned char wireframe )
+void drawtriangle( tri_t t, unsigned char wireframe, prog_t *program )
 {
 	if ( wireframe )
 	{
@@ -426,6 +456,7 @@ void drawtriangle( tri_t t, unsigned char wireframe )
 		newt.v[0].z = screen.znear;
 		newt.v[0].w = 1.f;
 		vlerp(&newt.n[0],t.n[c],t.n[a],t1);
+		vlerp(&newt.w[0],t.w[c],t.w[a],t1);
 		clerp(&newt.c[0],t.c[c],t.c[a],t1);
 		newt.t[0].s = lerp(t.t[c].s,t.t[a].s,t1);
 		newt.t[0].t = lerp(t.t[c].t,t.t[a].t,t1);
@@ -434,14 +465,16 @@ void drawtriangle( tri_t t, unsigned char wireframe )
 		newt.v[1].z = screen.znear;
 		newt.v[1].w = 1.f;
 		vlerp(&newt.n[1],t.n[c],t.n[b],t2);
+		vlerp(&newt.w[1],t.w[c],t.w[b],t2);
 		clerp(&newt.c[1],t.c[c],t.c[b],t2);
 		newt.t[1].s = lerp(t.t[c].s,t.t[b].s,t2);
 		newt.t[1].t = lerp(t.t[c].t,t.t[b].t,t2);
 		newt.v[2] = t.v[c];
+		newt.w[2] = t.w[c];
 		newt.n[2] = t.n[c];
 		newt.c[2] = t.c[c];
 		newt.t[2] = t.t[c];
-		drawclippedtriangle(newt);
+		drawclippedtriangle(newt,program);
 	}
 	else if ( fc == 1 )
 	{
@@ -455,10 +488,12 @@ void drawtriangle( tri_t t, unsigned char wireframe )
 		t2 = (screen.znear-t.v[b].z)/p2.z;
 		newt1.m = t.m;
 		newt1.v[0] = t.v[a];
+		newt1.w[0] = t.w[a];
 		newt1.n[0] = t.n[a];
 		newt1.c[0] = t.c[a];
 		newt1.t[0] = t.t[a];
 		newt1.v[1] = t.v[b];
+		newt1.w[1] = t.w[b];
 		newt1.n[1] = t.n[b];
 		newt1.c[1] = t.c[b];
 		newt1.t[1] = t.t[b];
@@ -467,20 +502,23 @@ void drawtriangle( tri_t t, unsigned char wireframe )
 		newt1.v[2].z = screen.znear;
 		newt1.v[2].w = 1.f;
 		vlerp(&newt1.n[2],t.n[a],t.n[c],t1);
+		vlerp(&newt1.w[2],t.w[a],t.w[c],t1);
 		clerp(&newt1.c[2],t.c[a],t.c[c],t1);
 		newt1.t[2].s = lerp(t.t[a].s,t.t[c].s,t1);
 		newt1.t[2].t = lerp(t.t[a].t,t.t[c].t,t1);
-		drawclippedtriangle(newt1);
+		drawclippedtriangle(newt1,program);
 		newt2.m = t.m;
 		newt2.v[0].x = t.v[a].x+p1.x*t1;
 		newt2.v[0].y = t.v[a].y+p1.y*t1;
 		newt2.v[0].z = screen.znear;
 		newt2.v[0].w = 1.f;
 		vlerp(&newt2.n[0],t.n[a],t.n[c],t1);
+		vlerp(&newt2.w[0],t.w[a],t.w[c],t1);
 		clerp(&newt2.c[0],t.c[a],t.c[c],t1);
 		newt2.t[0].s = lerp(t.t[a].s,t.t[c].s,t1);
 		newt2.t[0].t = lerp(t.t[a].t,t.t[c].t,t1);
 		newt2.v[1] = t.v[b];
+		newt2.w[1] = t.w[b];
 		newt2.n[1] = t.n[b];
 		newt2.c[1] = t.c[b];
 		newt2.t[1] = t.t[b];
@@ -489,12 +527,13 @@ void drawtriangle( tri_t t, unsigned char wireframe )
 		newt2.v[2].z = screen.znear;
 		newt2.v[2].w = 1.f;
 		vlerp(&newt2.n[2],t.n[b],t.n[c],t2);
+		vlerp(&newt2.w[2],t.w[b],t.w[c],t2);
 		clerp(&newt2.c[2],t.c[b],t.c[c],t2);
 		newt2.t[2].s = lerp(t.t[b].s,t.t[c].s,t2);
 		newt2.t[2].t = lerp(t.t[b].t,t.t[c].t,t2);
-		drawclippedtriangle(newt2);
+		drawclippedtriangle(newt2,program);
 	}
-	else drawclippedtriangle(t);
+	else drawclippedtriangle(t,program);
 }
 
 pixel_t clearcolor = {16,16,16,255};
@@ -504,48 +543,101 @@ int showhelp = 1;
 int drawwire = 0;
 int autorot = 1;
 
-void rendermodel( void )
+void clearscreen( void )
 {
 	/* and here we have buffer clearing, where 50% of the fps go die */
 	for ( int i=0; i<screen.width*screen.height; i++ )
 		screen.color[i] = clearcolor;
 	for ( int i=0; i<screen.width*screen.height; i++ )
 		screen.depth[i] = screen.zfar;
-	mat_t fulltransform;
-	vect_t basev[3], transv[3];
-	vect_t basen[3], transn[3];
-	fulltransform = rotation;
-	mmul(&fulltransform,fulltransform,translation);
-	mmul(&fulltransform,fulltransform,projection);
-	for ( int i=0; i<cube.ntri; i++ )
+	memset(screen.stencil,0,screen.width*screen.height*sizeof(int));
+}
+
+void shadowfrag_first( frag_t data )
+{
+	color_t shadow = {1.f,0.f,0.f,1.f};
+	putpixel(data.fragdata,shadow);
+}
+
+void calcshadowvolumes( model_t *caster, model_t *receiver )
+{
+	(void)receiver;
+	mat_t modeltransform;
+	modeltransform = rotation;
+	mmul(&modeltransform,modeltransform,translation);
+	vect_t sv[3], tv[3], psv[3], ptv[3];
+	vect_t offset = {0.f,0.f,0.00001f,0.f};
+	/* generate extruded shape */
+	for ( int i=0; i<caster->ntri; i++ )
 	{
 		for ( int j=0; j<3; j++ )
 		{
-			basev[j].x = cube.vertices[cube.triangles[i].v[j]].x;
-			basev[j].y = cube.vertices[cube.triangles[i].v[j]].y;
-			basev[j].z = cube.vertices[cube.triangles[i].v[j]].z;
+			vmat(&tv[j],modeltransform,
+				caster->vertices[caster->triangles[i].v[j]]);
+			vsub(&sv[j],tv[j],lightpos);
+			normalize(&sv[j]);
+			vscale(&sv[j],sv[j],screen.zfar);
+			vadd(&sv[j],sv[j],lightpos);
+			vmat(&psv[j],projection,sv[j]);
+			vmat(&ptv[j],projection,tv[j]);
+			vadd(&ptv[j],ptv[j],offset);
+		}
+		tri_t backcap[2] =
+		{{
+			{ptv[0],ptv[1],ptv[2]},{tv[0],tv[1],tv[2]},
+			{{0,0,0,0},{0,0,0,0},{0,0,0,0}},
+			{{0,0},{0,0},{0,0}},
+			{{0,0,0,0},{0,0,0,0},{0,0,0,0}},0
+		},{
+			{psv[0],psv[1],psv[2]},{sv[0],sv[1],sv[2]},
+			{{0,0,0,0},{0,0,0,0},{0,0,0,0}},
+			{{0,0},{0,0},{0,0}},
+			{{0,0,0,0},{0,0,0,0},{0,0,0,0}},0
+		}};
+		drawtriangle(backcap[0],0,shadowfrag_first);
+		drawtriangle(backcap[1],0,shadowfrag_first);
+	}
+}
+
+void rendermodel( model_t *mod )
+{
+	mat_t fulltransform, modeltransform;
+	vect_t basev[3], transv[3], worldv[3];
+	vect_t basen[3], transn[3];
+	modeltransform = rotation;
+	mmul(&modeltransform,modeltransform,translation);
+	mmul(&fulltransform,modeltransform,projection);
+	for ( int i=0; i<mod->ntri; i++ )
+	{
+		for ( int j=0; j<3; j++ )
+		{
+			basev[j].x = mod->vertices[mod->triangles[i].v[j]].x;
+			basev[j].y = mod->vertices[mod->triangles[i].v[j]].y;
+			basev[j].z = mod->vertices[mod->triangles[i].v[j]].z;
 			basev[j].w = 1.f;
 			vmat(&transv[j],fulltransform,basev[j]);
-			basen[j].x = cube.normals[cube.triangles[i].n[j]].x;
-			basen[j].y = cube.normals[cube.triangles[i].n[j]].y;
-			basen[j].z = cube.normals[cube.triangles[i].n[j]].z;
+			vmat(&worldv[j],modeltransform,basev[j]);
+			basen[j].x = mod->normals[mod->triangles[i].n[j]].x;
+			basen[j].y = mod->normals[mod->triangles[i].n[j]].y;
+			basen[j].z = mod->normals[mod->triangles[i].n[j]].z;
 			basen[j].w = 1.f;
 			vmat(&transn[j],rotation,basen[j]);
 		}
 		tri_t face =
 		{
 			{transv[0],transv[1],transv[2]},
+			{worldv[0],worldv[1],worldv[2]},
 			{transn[0],transn[1],transn[2]},
-			{cube.txcoords[cube.triangles[i].t[0]],
-			cube.txcoords[cube.triangles[i].t[1]],
-			cube.txcoords[cube.triangles[i].t[2]]},
-			{cube.colors[cube.triangles[i].c[0]],
-			cube.colors[cube.triangles[i].c[1]],
-			cube.colors[cube.triangles[i].c[2]]},
-			&cube.materials[cube.triangles[i].mat],
+			{mod->txcoords[mod->triangles[i].t[0]],
+			mod->txcoords[mod->triangles[i].t[1]],
+			mod->txcoords[mod->triangles[i].t[2]]},
+			{mod->colors[mod->triangles[i].c[0]],
+			mod->colors[mod->triangles[i].c[1]],
+			mod->colors[mod->triangles[i].c[2]]},
+			&mod->materials[mod->triangles[i].mat],
 		};
-		if ( drawwire < 2 ) drawtriangle(face,0);
-		if ( drawwire > 0 ) drawtriangle(face,1);
+		if ( drawwire < 2 ) drawtriangle(face,0,mod->prog);
+		if ( drawwire > 0 ) drawtriangle(face,1,0);
 	}
 }
 
@@ -558,6 +650,7 @@ int main( void )
 	SDL_Surface *scr = SDL_GetWindowSurface(win);
 	screen.color = malloc(sizeof(pixel_t)*screen.width*screen.height);
 	screen.depth = malloc(sizeof(float)*screen.width*screen.height);
+	screen.stencil = malloc(sizeof(int)*screen.width*screen.height);
 	SDL_Surface *fb = SDL_CreateRGBSurfaceFrom(screen.color,screen.width,
 		screen.height,32,sizeof(pixel_t)*screen.width,0xFF0000,0xFF00,
 		0xFF,0xFF000000);
@@ -619,6 +712,7 @@ int main( void )
 					culling = (culling<2)?(culling+1):0;
 			}
 		}
+		clearscreen();
 		mat_t rotx, rotz;
 		if ( autorot )
 		{
@@ -629,7 +723,11 @@ int main( void )
 		rotate(&rotz,90.f*rz,ROT_Z);
 		mmul(&rotation,rotz,rotx);
 		translate(&translation,cubepos);
-		rendermodel();
+		rendermodel(&cube);
+		calcshadowvolumes(&cube,&flat);
+		mident(&rotation);
+		translate(&translation,flatpos);
+		rendermodel(&flat);
 		SDL_BlitSurface(fb,0,scr,0);
 		SDL_Surface *txt;
 		if ( showfps )
@@ -663,6 +761,7 @@ int main( void )
 	}
 	free(screen.color);
 	free(screen.depth);
+	free(screen.stencil);
 	TTF_CloseFont(fon);
 	TTF_Quit();
 	SDL_FreeSurface(fb);
